@@ -1,52 +1,194 @@
-<x-guest-layout>
-    <form method="POST" action="{{ route('register') }}">
-        @csrf
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Register - WaviChat</title>
+    <link rel="icon" type="image/png" href="{{ asset('image/wavi_logo.png') }}">
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        body {
+            background: linear-gradient(135deg, #1c3f3f, #3a6a6a);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Inter', sans-serif;
+            padding: 1rem;
+        }
 
-        <!-- Name -->
-        <div>
-            <x-input-label for="name" :value="__('Name')" />
-            <x-text-input id="name" class="block mt-1 w-full" type="text" name="name" :value="old('name')" required autofocus autocomplete="name" />
-            <x-input-error :messages="$errors->get('name')" class="mt-2" />
-        </div>
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 1.5rem;
+            padding: 2.5rem 2rem;
+            width: 90%;
+            max-width: 380px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
 
-        <!-- Email Address -->
-        <div class="mt-4">
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
-        </div>
+        .logo {
+            width: 70px;
+            height: 70px;
+            margin: 0 auto 1rem;
+            transition: transform 0.3s ease;
+        }
 
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
+        .card:hover .logo {
+            transform: scale(1.05);
+        }
 
-            <x-text-input id="password" class="block mt-1 w-full"
-                            type="password"
-                            name="password"
-                            required autocomplete="new-password" />
+        h1 {
+            color: #fff;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
 
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
-        </div>
+        p.subtitle {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.95rem;
+            margin-bottom: 1.8rem;
+        }
 
-        <!-- Confirm Password -->
-        <div class="mt-4">
-            <x-input-label for="password_confirmation" :value="__('Confirm Password')" />
+        input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.3);
+            margin-bottom: 1rem;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            outline: none;
+            transition: all 0.3s ease;
+        }
 
-            <x-text-input id="password_confirmation" class="block mt-1 w-full"
-                            type="password"
-                            name="password_confirmation" required autocomplete="new-password" />
+        input:focus {
+            border-color: #25D366;
+            box-shadow: 0 0 5px #25D366;
+            background: rgba(255,255,255,0.15);
+        }
 
-            <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
-        </div>
+        .btn {
+            width: 100%;
+            padding: 0.75rem 0;
+            border-radius: 999px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
 
-        <div class="flex items-center justify-end mt-4">
-            <a class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" href="{{ route('login') }}">
-                {{ __('Already registered?') }}
-            </a>
+        .btn-register {
+            background-color: #25D366;
+            color: white;
+            border: none;
+        }
 
-            <x-primary-button class="ms-4">
-                {{ __('Register') }}
-            </x-primary-button>
-        </div>
-    </form>
-</x-guest-layout>
+        .btn-register:hover {
+            transform: translateY(-3px) scale(1.03);
+            box-shadow: 0 0 12px #25D366;
+        }
+
+        .btn-login-link {
+            display: block;
+            margin-top: 1rem;
+            color: #25D366;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .btn-login-link:hover {
+            color: #1ec95a;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 480px) {
+            .card {
+                padding: 2rem 1.5rem;
+            }
+            .logo {
+                width: 60px;
+                height: 60px;
+            }
+            h1 {
+                font-size: 1.25rem;
+            }
+            p.subtitle {
+                font-size: 0.85rem;
+            }
+            input {
+                padding: 0.6rem 0.8rem;
+            }
+            .btn {
+                padding: 0.6rem 0;
+                font-size: 0.9rem;
+            }
+        }
+
+        @media (min-width: 481px) and (max-width: 768px) {
+            .card {
+                padding: 2.25rem 1.75rem;
+            }
+            .logo {
+                width: 65px;
+                height: 65px;
+            }
+            h1 {
+                font-size: 1.35rem;
+            }
+            p.subtitle {
+                font-size: 0.9rem;
+            }
+            input {
+                padding: 0.65rem 0.9rem;
+            }
+            .btn {
+                padding: 0.65rem 0;
+                font-size: 0.95rem;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .card {
+                padding: 2.5rem 2rem;
+            }
+            .logo {
+                width: 70px;
+                height: 70px;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+            p.subtitle {
+                font-size: 0.95rem;
+            }
+            input {
+                padding: 0.75rem 1rem;
+            }
+            .btn {
+                padding: 0.75rem 0;
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img src="{{ asset('image/wavi_logo1.png') }}" alt="WaviChat Logo" class="logo">
+        <h1>Join WaviChat!</h1>
+        <p class="subtitle">Create an account and start connecting</p>
+
+        <form method="POST" action="{{ route('register') }}">
+            @csrf
+            <input type="text" name="name" placeholder="Full Name" required autofocus>
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="password" name="password_confirmation" placeholder="Confirm Password" required>
+            <button type="submit" class="btn btn-register">Register</button>
+        </form>
+
+        <a href="{{ route('login') }}" class="btn-login-link">Already have an account? Login</a>
+    </div>
+</body>
+</html>
