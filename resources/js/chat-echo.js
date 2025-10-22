@@ -1,4 +1,3 @@
-// resources/js/chat-echo.js
 window.listenToConversation = function(conversationId) {
     if (!conversationId) return;
     if (!window.Echo || !window.Echo.private) return;
@@ -20,7 +19,6 @@ window.listenToConversation = function(conversationId) {
         .listen('.MessageSent', (e) => {
             console.log('Message received via Echo:', e);
             if (window.Livewire) {
-                // ✅ Ensure we're passing the event data properly
                 Livewire.dispatch('messageReceived', { event: e });
             }
         })

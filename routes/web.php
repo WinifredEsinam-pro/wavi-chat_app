@@ -17,6 +17,12 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+Route::get('/download-file/{message}', function (App\Models\Message $message) {
+    if ($message->is_file && Storage::disk('public')->exists($message->file_path)) {
+        return Storage::disk('public')->download($message->file_path, $message->file_name);
+    }
+    abort(404, 'File not found.');
+})->name('file.download')->middleware('auth');
 
 
 require __DIR__.'/auth.php';

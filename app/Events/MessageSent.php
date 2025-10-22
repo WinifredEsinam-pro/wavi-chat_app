@@ -30,14 +30,16 @@ class MessageSent implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
+        // Ensure sender relationship is loaded
         if (!$this->message->relationLoaded('sender')) {
             $this->message->load('sender');
         }
 
-        return [
+        $data = [
             'id' => $this->message->id,
             'conversation_id' => $this->message->conversation_id,
             'sender_id' => $this->message->sender_id,
+            'type' => $this->message->type,
             'message' => $this->message->message,
             'created_at' => $this->message->created_at->toDateTimeString(),
             'sender' => [
@@ -45,6 +47,16 @@ class MessageSent implements ShouldBroadcastNow
                 'name' => $this->message->sender->name,
             ],
         ];
+
+        // Add file data if it's a file message
+        if ($this->message->type === 'file') {
+            $data['file_path'] = $this->message->file_path;
+            $data['file_name'] = $this->message->file_name;
+            $data['file_size'] = $this->message->file_size;
+            $data['mime_type'] = $this->message->mime_type;
+        }
+
+        return $data;
     }
 
     public function broadcastAs(): string
