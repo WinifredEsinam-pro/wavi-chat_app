@@ -1,4 +1,5 @@
 <?php
+// app/Livewire/ChatList.php
 
 namespace App\Livewire;
 
@@ -32,16 +33,21 @@ class ChatList extends Component
     public $contactPhone = '';
     public $contactEmail = '';
 
+    public $showProfileModal = false;
+    public $profilePicture;
+
     protected $listeners = [
         'openConversation',
         'messageReceived' => 'handleBroadcastedMessage',
-        'voteOnPoll'
+        'voteOnPoll',
+        'showProfileModal' => 'showProfileModal',
     ];
 
     public function mount()
     {
         $this->users = User::where('id', '!=', Auth::id())->orderBy('name')->get();
         $this->messages = collect();
+        $this->updateLastSeen();
     }
 
     public function openConversation($userId)
@@ -71,6 +77,7 @@ class ChatList extends Component
             ->where('is_read', false)
             ->update(['is_read' => true]);
 
+        $this->updateLastSeen();
         $this->dispatch('listenOnConversation', conversationId: $this->conversationId);
         $this->dispatch('messagesLoaded');
     }
@@ -197,12 +204,10 @@ class ChatList extends Component
     {
         $errors = [];
 
-        // Validate poll question
         if (empty(trim($this->pollQuestion))) {
             $errors[] = 'Poll question is required.';
         }
 
-        // Validate poll options
         $pollOptionsArray = (array) $this->pollOptions;
         $validOptions = 0;
         
@@ -221,7 +226,6 @@ class ChatList extends Component
 
     public function shareContact()
     {
-        // Manual validation for contact
         $errors = [];
         
         if (empty(trim($this->contactName))) {
@@ -268,7 +272,95 @@ class ChatList extends Component
         }
     }
 
-    // Helper methods
+    public function updateLastSeen()
+    {
+        Auth::user()->update(['last_seen' => now()]);
+    }
+
+    public function showProfileModal()
+    {
+        \Log::info('showProfileModal called successfully');
+        $this->showProfileModal = true;
+        $this->profilePicture = null;
+    }
+
+    public function closeProfileModal()
+    {
+        $this->showProfileModal = false;
+        $this->profilePicture = null;
+        $this->resetErrorBag();
+    }
+
+    public function uploadProfilePicture()
+    {
+        $errors = [];
+        
+        if (!$this->profilePicture) {
+            $errors[] = 'Please select a profile picture.';
+        }
+        
+        if ($this->profilePicture && !$this->profilePicture instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile) {
+            $errors[] = 'Invalid file selected.';
+        }
+        
+        if ($this->profilePicture && $this->profilePicture instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile) {
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+            $fileMime = $this->profilePicture->getMimeType();
+            
+            if (!in_array($fileMime, $allowedMimes)) {
+                $errors[] = 'Invalid file type. Please select a JPG, PNG, or GIF image.';
+            }
+            
+            if ($this->profilePicture->getSize() > 2097152) {
+                $errors[] = 'File size too large. Maximum size is 2MB.';
+            }
+        }
+        
+        if (!empty($errors)) {
+            session()->flash('error', implode(' ', $errors));
+            return;
+        }
+
+        try {
+            $user = Auth::user();
+            
+            if ($user->profile_picture && Storage::disk('public')->exists($user->profile_picture)) {
+                Storage::disk('public')->delete($user->profile_picture);
+            }
+
+            $path = $this->profilePicture->store('profile_pictures', 'public');
+            $user->update(['profile_picture' => $path]);
+            
+            $this->profilePicture = null;
+            $this->showProfileModal = false;
+            
+            $this->dispatch('profilePictureUpdated');
+            
+            session()->flash('success', 'Profile picture updated successfully!');
+            
+        } catch (\Exception $e) {
+            session()->flash('error', 'Failed to upload profile picture: ' . $e->getMessage());
+            $this->profilePicture = null;
+        }
+    }
+
+    public function clearProfilePicture()
+    {
+        $this->profilePicture = null;
+    }
+
+    public function removeProfilePicture()
+    {
+        $user = Auth::user();
+        if ($user->profile_picture && Storage::disk('public')->exists($user->profile_picture)) {
+            Storage::disk('public')->delete($user->profile_picture);
+        }
+        
+        $user->update(['profile_picture' => null]);
+        $this->showProfileModal = false;
+        session()->flash('success', 'Profile picture removed!');
+    }
+
     private function processMessage($message)
     {
         $message->load('sender');
@@ -291,63 +383,54 @@ class ChatList extends Component
     }
 
     private function generateVideoThumbnail($videoPath)
-{
-    try {
-        // Check if FFmpeg is available
-        if (!class_exists('FFMpeg\FFMpeg')) {
-            \Log::warning('FFMpeg class not found - thumbnails disabled');
+    {
+        try {
+            if (!class_exists('FFMpeg\FFMpeg')) {
+                \Log::warning('FFMpeg class not found - thumbnails disabled');
+                return null;
+            }
+
+            $ffmpeg = \FFMpeg\FFMpeg::create([
+                'ffmpeg.binaries'  => env('FFMPEG_BINARIES', 'ffmpeg'),
+                'ffprobe.binaries' => env('FFPROBE_BINARIES', 'ffprobe'),
+                'timeout'          => 60,
+                'ffmpeg.threads'   => 4,
+            ]);
+
+            $fullVideoPath = Storage::disk('public')->path($videoPath);
+            
+            if (!file_exists($fullVideoPath)) {
+                \Log::error('Video file not found: ' . $fullVideoPath);
+                return null;
+            }
+
+            $video = $ffmpeg->open($fullVideoPath);
+            
+            $thumbnailFileName = pathinfo($videoPath, PATHINFO_FILENAME) . '_thumb.jpg';
+            $thumbnailPath = 'chat_thumbnails/' . $thumbnailFileName;
+            
+            Storage::disk('public')->makeDirectory('chat_thumbnails');
+            
+            $videoStream = $video->getStreams()->videos()->first();
+            if ($videoStream) {
+                $duration = $videoStream->get('duration');
+                $frameTime = $duration ? min(5, $duration * 0.1) : 1;
+            } else {
+                $frameTime = 1;
+            }
+            
+            $video
+                ->frame(\FFMpeg\Coordinate\TimeCode::fromSeconds($frameTime))
+                ->save(Storage::disk('public')->path($thumbnailPath));
+            
+            \Log::info('Video thumbnail generated: ' . $thumbnailPath);
+            return $thumbnailPath;
+
+        } catch (\Exception $e) {
+            \Log::error('Video thumbnail generation failed: ' . $e->getMessage());
             return null;
         }
-
-        // Create FFmpeg instance
-        $ffmpeg = \FFMpeg\FFMpeg::create([
-            'ffmpeg.binaries'  => env('FFMPEG_BINARIES', 'ffmpeg'),
-            'ffprobe.binaries' => env('FFPROBE_BINARIES', 'ffprobe'),
-            'timeout'          => 60, // 60 second timeout
-            'ffmpeg.threads'   => 4,  // Number of threads
-        ]);
-
-        // Full path to the video file
-        $fullVideoPath = Storage::disk('public')->path($videoPath);
-        
-        // Check if video file exists
-        if (!file_exists($fullVideoPath)) {
-            \Log::error('Video file not found: ' . $fullVideoPath);
-            return null;
-        }
-
-        // Open the video file
-        $video = $ffmpeg->open($fullVideoPath);
-        
-        // Generate thumbnail filename
-        $thumbnailFileName = pathinfo($videoPath, PATHINFO_FILENAME) . '_thumb.jpg';
-        $thumbnailPath = 'chat_thumbnails/' . $thumbnailFileName;
-        
-        // Create thumbnails directory if it doesn't exist
-        Storage::disk('public')->makeDirectory('chat_thumbnails');
-        
-        // Get video duration to extract frame from 10% of the video
-        $videoStream = $video->getStreams()->videos()->first();
-        if ($videoStream) {
-            $duration = $videoStream->get('duration');
-            $frameTime = $duration ? min(5, $duration * 0.1) : 1;
-        } else {
-            $frameTime = 1;
-        }
-        
-        // Extract frame and save as thumbnail
-        $video
-            ->frame(\FFMpeg\Coordinate\TimeCode::fromSeconds($frameTime))
-            ->save(Storage::disk('public')->path($thumbnailPath));
-        
-        \Log::info('Video thumbnail generated: ' . $thumbnailPath);
-        return $thumbnailPath;
-
-    } catch (\Exception $e) {
-        \Log::error('Video thumbnail generation failed: ' . $e->getMessage());
-        return null;
     }
-}
 
     private function handlePollVote($message, $optionIndex)
     {
@@ -438,7 +521,6 @@ class ChatList extends Component
         return null;
     }
 
-    // Helper method to format file size
     public function formatFileSize($bytes)
     {
         if ($bytes >= 1073741824) {
@@ -452,7 +534,6 @@ class ChatList extends Component
         }
     }
 
-    // Helper method to get file icon based on type
     public function getFileIcon($mimeType, $fileName)
     {
         $extension = pathinfo($fileName, PATHINFO_EXTENSION);
@@ -472,7 +553,6 @@ class ChatList extends Component
         }
     }
 
-    // Helper method to format dates
     public function formatMessageDate($date)
     {
         $messageDate = Carbon::parse($date);
@@ -490,7 +570,6 @@ class ChatList extends Component
         }
     }
 
-    // Helper method to get message status icons
     public function getMessageStatus($message)
     {
         if ($message->sender_id != Auth::id()) {
@@ -504,7 +583,6 @@ class ChatList extends Component
         }
     }
 
-    // Helper method to group messages by date
     public function getGroupedMessages()
     {
         if (!$this->messages || $this->messages->isEmpty()) {
@@ -515,6 +593,7 @@ class ChatList extends Component
             return Carbon::parse($message->created_at)->format('Y-m-d');
         });
     }
+
 
     public function render()
     {
