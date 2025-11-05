@@ -1,5 +1,4 @@
 <?php
-// app/Livewire/ChatList.php
 
 namespace App\Livewire;
 

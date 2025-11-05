@@ -1,5 +1,4 @@
 <?php
-// app/Livewire/GroupChat.php
 
 namespace App\Livewire;
 
@@ -10,6 +9,7 @@ use App\Models\GroupMessage;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class GroupChat extends Component
 {
@@ -20,21 +20,32 @@ class GroupChat extends Component
     public $messages;
     public $newMessage = '';
 
-    // Group creation
     public $showCreateGroupModal = false;
     public $groupName = '';
     public $groupDescription = '';
     public $selectedUsers = [];
     public $groupAvatar;
 
-    // Group info
     public $showGroupInfoModal = false;
     public $showAddMembersModal = false;
     public $selectedNewMembers = [];
 
+    public $uploadedFile;
+    public $isUploading = false;
+    public $showPollModal = false;
+    public $pollQuestion = '';
+    public $pollOptions = ['', ''];
+    
+    public $showContactModal = false;
+    public $contactName = '';
+    public $contactPhone = '';
+    public $contactEmail = '';
+
     protected $listeners = [
         'openGroupConversation',
-        'showCreateGroupModal'
+        'showCreateGroupModal',
+        'messageReceived' => 'handleBroadcastedMessage',
+        'voteOnPoll',
     ];
 
     public function mount()
@@ -71,7 +82,6 @@ class GroupChat extends Component
             $errors[] = 'Group name must be at least 3 characters.';
         }
         
-        // Convert selectedUsers to array and check
         if ($this->selectedUsers instanceof \Illuminate\Support\Collection) {
             $selectedUsersArray = $this->selectedUsers->toArray();
         } else {
@@ -90,23 +100,19 @@ class GroupChat extends Component
         }
 
         try {
-            // Create group
             $group = Group::create([
                 'name' => trim($this->groupName),
                 'description' => trim($this->groupDescription),
                 'created_by' => Auth::id(),
             ]);
 
-            // Add group avatar if uploaded
             if ($this->groupAvatar) {
                 $path = $this->groupAvatar->store('group_avatars', 'public');
                 $group->update(['avatar' => $path]);
             }
 
-            // Add creator as admin
             $group->members()->attach(Auth::id(), ['role' => 'admin']);
 
-            // Add selected members
             foreach ($selectedUsersArray as $userId) {
                 $group->members()->attach((int)$userId, ['role' => 'member']);
             }
@@ -198,16 +204,13 @@ class GroupChat extends Component
     {
         if (!$this->activeGroup || !$this->groupAvatar) return;
 
-        // Manual validation
         $errors = [];
         
-        // Check if file is an image
-        $allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
+       $allowedMimes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
         if (!in_array($this->groupAvatar->getMimeType(), $allowedMimes)) {
             $errors[] = 'Please select a valid image file (JPG, PNG, GIF).';
         }
         
-        // Check file size (2MB = 2097152 bytes)
         if ($this->groupAvatar->getSize() > 2097152) {
             $errors[] = 'File size too large. Maximum size is 2MB.';
         }
@@ -218,12 +221,10 @@ class GroupChat extends Component
         }
 
         try {
-            // Delete old avatar if exists
             if ($this->activeGroup->avatar && Storage::disk('public')->exists($this->activeGroup->avatar)) {
                 Storage::disk('public')->delete($this->activeGroup->avatar);
             }
 
-            // Store new avatar
             $path = $this->groupAvatar->store('group_avatars', 'public');
             $this->activeGroup->update(['avatar' => $path]);
 
@@ -253,7 +254,6 @@ class GroupChat extends Component
     {
         if (!$this->activeGroup) return;
 
-        // Convert to array if it's a Collection
         if ($this->selectedNewMembers instanceof \Illuminate\Support\Collection) {
             $selectedMembers = $this->selectedNewMembers->toArray();
         } else {
@@ -307,8 +307,86 @@ class GroupChat extends Component
         }
     }
 
+    public function formatMessageDate($date)
+    {
+        $messageDate = Carbon::parse($date);
+        $today = Carbon::today();
+        $yesterday = Carbon::yesterday();
+
+        if ($messageDate->isToday()) {
+            return 'Today';
+        } elseif ($messageDate->isYesterday()) {
+            return 'Yesterday';
+        } elseif ($messageDate->isCurrentWeek()) {
+            return $messageDate->format('l'); 
+        } else {
+            return $messageDate->format('M j, Y');
+        }
+    }
+
+    public function getMessageStatus($message)
+    {
+        if ($message->sender_id != Auth::id()) {
+            return '';
+        }
+
+        if ($message->is_read) {
+            return 'fa-check-double text-blue-700';
+        } else {
+            return 'fa-check text-gray-600';
+        }
+    }
+    public function getGroupedMessages()
+    {
+        if (!$this->messages || $this->messages->isEmpty()) {
+            return collect();
+        }
+
+        return $this->messages->groupBy(function($message) {
+            return Carbon::parse($message->created_at)->format('Y-m-d');
+        });
+    }
+
+    public function getFileIcon($mimeType, $fileName)
+    {
+        $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+        
+        if (str_contains($mimeType, 'image')) {
+            return 'fa-image';
+        } elseif (str_contains($mimeType, 'pdf')) {
+            return 'fa-file-pdf';
+        } elseif (str_contains($mimeType, 'word') || in_array($extension, ['doc', 'docx'])) {
+            return 'fa-file-word';
+        } elseif (str_contains($mimeType, 'excel') || in_array($extension, ['xls', 'xlsx'])) {
+            return 'fa-file-excel';
+        } elseif (str_contains($mimeType, 'zip') || in_array($extension, ['zip', 'rar'])) {
+            return 'fa-file-archive';
+        } else {
+            return 'fa-file';
+        }
+    }
+
+    public function formatFileSize($bytes)
+    {
+        if ($bytes >= 1073741824) {
+            return number_format($bytes / 1073741824, 2) . ' GB';
+        } elseif ($bytes >= 1048576) {
+            return number_format($bytes / 1048576, 2) . ' MB';
+        } elseif ($bytes >= 1024) {
+            return number_format($bytes / 1024, 2) . ' KB';
+        } else {
+            return $bytes . ' bytes';
+        }
+    }
+
+
+
+    
+
     public function render()
     {
-        return view('livewire.group-chat');
+        return view('livewire.group-chat', [
+            'groupedMessages' => $this->getGroupedMessages(),
+        ]);
     }
 }

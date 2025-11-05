@@ -61,7 +61,6 @@ class User extends Authenticatable
         return $this->hasMany(Conversation::class, 'user_two_id');
     }
 
-    // Online status
     public function isOnline()
     {
         $lastSeen = $this->last_seen;
@@ -86,7 +85,6 @@ class User extends Authenticatable
         return strtoupper(substr($this->name, 0, 1));
     }
 
-    // Groups this user belongs to
     public function groups(): BelongsToMany
     {
         return $this->belongsToMany(Group::class, 'group_members')
@@ -94,9 +92,70 @@ class User extends Authenticatable
                     ->withTimestamps();
     }
 
-    // Group messages sent by this user
     public function groupMessages(): HasMany
     {
         return $this->hasMany(GroupMessage::class, 'sender_id');
+    }
+
+    public function sentFriendRequests(): HasMany
+    {
+        return $this->hasMany(Friend::class, 'user_id');
+    }
+
+    public function receivedFriendRequests(): HasMany
+    {
+        return $this->hasMany(Friend::class, 'friend_id');
+    }
+
+    public function friends()
+    {
+         return $this->sentFriendRequests()
+            ->where('status', 'accepted')
+            ->with('friend')
+            ->get()
+            ->merge(
+                $this->receivedFriendRequests()
+                    ->where('status', 'accepted')
+                    ->with('user')
+                    ->get()
+            );
+    }
+
+    public function pendingFriendRequests()
+    {
+        return $this->receivedFriendRequests()
+            ->where('status', 'pending')
+            ->with('user')
+            ->get();
+    }
+
+    public function isFriendsWith($userId): bool
+    {
+        return $this->sentFriendRequests()
+            ->where('friend_id', $userId)
+            ->where('status', 'accepted')
+            ->exists()
+            ||
+            $this->receivedFriendRequests()
+            ->where('user_id', $userId)
+            ->where('status', 'accepted')
+            ->exists();
+             }
+
+
+    public function hasPendingRequestFrom($userId): bool
+    {
+        return $this->receivedFriendRequests()
+            ->where('user_id', $userId)
+            ->where('status', 'pending')
+            ->exists();
+    }
+
+    public function hasSentRequestTo($userId): bool
+    {
+        return $this->sentFriendRequests()
+            ->where('friend_id', $userId)
+            ->where('status', 'pending')
+            ->exists();
     }
 }

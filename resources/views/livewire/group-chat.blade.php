@@ -1,4 +1,5 @@
 <div class="flex flex-col h-full bg-white">
+    
     {{-- Group Chat Header --}}
 @if($activeGroup)
 <div class="flex items-center justify-between px-4 py-3 border-b border-gray-300">
@@ -25,11 +26,23 @@
     </button>
 </div>
 @endif
+{{-- Messages Area --}}
+<div id="messagesList" class="flex-1 overflow-auto p-4 space-y-1">
+    @if($activeGroup && $messages->count())
+        @php
+            $groupedMessages = $this->getGroupedMessages();
+        @endphp
+        
+        @foreach($groupedMessages as $date => $dateMessages)
+            {{-- Date Separator --}}
+            <div class="flex justify-center my-4">
+                <div class="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full">
+                    {{ $this->formatMessageDate($date) }}
+                </div>
+            </div>
 
-    {{-- Messages Area --}}
-    <div id="messagesList" class="flex-1 overflow-auto p-4 space-y-1">
-        @if($activeGroup && $messages->count())
-            @foreach($messages as $msg)
+            {{-- Messages for this date --}}
+            @foreach($dateMessages as $msg)
                 @php
                     $isMe = $msg->sender_id == auth()->id();
                 @endphp
@@ -39,7 +52,7 @@
                         {{-- Sender name for group messages --}}
                         @if(!$isMe)
                             <div class="text-xs font-semibold text-gray-600 mb-1">
-                                {{ $msg->sender->name }}
+                                {{ $msg->sender->name ?? 'Unknown User' }}
                             </div>
                         @endif
                         
@@ -47,25 +60,35 @@
                         <div class="text-sm leading-tight">{!! nl2br(e($msg->message)) !!}</div>
                         
                         {{-- Message time --}}
-                        <div class="text-xs mt-1 opacity-70 text-right">
-                            {{ $msg->created_at->format('H:i') }}
+                        <div class="text-xs mt-1 opacity-70 text-right flex items-center justify-end gap-1">
+                            <span>{{ $msg->created_at->format('H:i') }}</span>
+                            @if($isMe)
+                                @php
+                                    $statusIcon = $this->getMessageStatus($msg);
+                                @endphp
+                                @if($statusIcon)
+                                    <i class="fas {{ $statusIcon }}"></i>
+                                @endif
+                            @endif
                         </div>
                     </div>
                 </div>
             @endforeach
-        @elseif($activeGroup)
-            <div class="text-center text-gray-500 py-8">
-                <i class="fas fa-comments text-3xl mb-2 opacity-50"></i>
-                <div class="text-sm">No messages yet</div>
-                <div class="text-xs mt-1">Send a message to start the conversation</div>
-            </div>
-        @else
-            <div class="text-center text-gray-500 py-8">
-                <i class="fas fa-users text-3xl mb-2 opacity-50"></i>
+        @endforeach
+    @elseif($activeGroup)
+        <div class="text-center text-gray-500 py-8">
+            <i class="fas fa-comments text-3xl mb-2 opacity-50"></i>
+            <div class="text-sm">No messages yet</div>
+            <div class="text-xs mt-1">Send a message to start the conversation</div>
+        </div>
+    @else
+        <div class="text-center text-gray-500 py-8">
+                 <i class="fas fa-users text-3xl mb-2 opacity-50"></i>
                 <div class="text-sm">Select a group to start messaging</div>
-            </div>
-        @endif
-    </div>
+        </div>
+    @endif
+</div>
+
 
     {{-- Message Input --}}
     @if($activeGroup)

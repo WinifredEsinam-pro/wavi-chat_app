@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="{{ asset('image/wavi_logo.png') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.12.0/index.css" />
     <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -114,7 +115,7 @@
             </button>
             
 {{-- New Group Button --}}
-<button onclick="openGroupModal()" 
+<button onclick="showGroupChatAndOpenModal()" 
         @click="open = false"
         class="w-full flex items-center gap-3 p-2 hover:bg-gray-100 rounded-lg transition text-left">
     <i class="fas fa-users text-green-500"></i>
@@ -145,6 +146,7 @@
 </form>
         {{-- Users and Groups List --}}
     <div class="flex-1 overflow-y-auto bg-white">
+@livewire('contact-search')
         {{-- Saved Messages --}}
         <div data-user-id="{{ auth()->id() }}" 
              class="user-item cursor-pointer p-3 hover:bg-gray-100 border-b border-gray-200 flex items-center gap-3 transition-colors">
@@ -326,7 +328,7 @@
 
 @livewireScripts
 <script>
-// Function to show one-on-one chat and hide group chat
+//show one-on-one chat and hide group chat
 function showOneOnOneChat() {
     const oneOnOneChat = document.getElementById('oneOnOneChat');
     const groupChat = document.getElementById('groupChat');
@@ -335,7 +337,7 @@ function showOneOnOneChat() {
     if (groupChat) groupChat.classList.add('hidden');
 }
 
-// Function to show group chat and hide one-on-one chat
+//show group chat and hide one-on-one chat
 function showGroupChat() {
     const oneOnOneChat = document.getElementById('oneOnOneChat');
     const groupChat = document.getElementById('groupChat');
@@ -385,7 +387,6 @@ userItems.forEach(item => {
         document.getElementById('headerName').textContent = userName;
         document.getElementById('headerSub').textContent = 'Online';
         
-        // Update avatar for individual chat
         const headerAvatar = document.getElementById('headerAvatar');
         if (userAvatar) {
             headerAvatar.innerHTML = `<img src="${userAvatar.src}" alt="${userName}" class="w-10 h-10 rounded-full object-cover">`;
@@ -402,7 +403,6 @@ userItems.forEach(item => {
         showOneOnOneChat();
         showChatArea();
 
-        // Call Livewire for one-on-one chat
         if (window.Livewire) {
             Livewire.dispatch('openConversation', { userId: userId });
         }
@@ -436,7 +436,6 @@ groupItems.forEach(item => {
         showGroupChat();
         showChatArea();
 
-        // Call Livewire for group chat
         if (window.Livewire) {
             console.log('Dispatching openGroupConversation to Livewire');
             Livewire.dispatch('openGroupConversation', { groupId: groupId });
@@ -483,7 +482,6 @@ if (backBtn) {
             }
         });
         
-        // refresh the main sidebar profile picture
         const mainProfileImg = document.querySelector('.p-4.border-b img');
         if (mainProfileImg) {
             if (mainProfileImg.src.includes('?')) {
@@ -494,11 +492,9 @@ if (backBtn) {
         }
     });
 
-    // Listen for groups update event
     Livewire.on('groupsUpdated', () => {
         console.log('Groups updated, refreshing sidebar...');
         
-        // Reload the page to show the new group
         setTimeout(() => {
             window.location.reload();
         }, 500);
@@ -526,6 +522,14 @@ if (backBtn) {
         }
     });
 });
+function showGroupChatAndOpenModal() {
+    showGroupChat();
+    
+    setTimeout(() => {
+        Livewire.dispatch('showCreateGroupModal');
+    }, 200);
+}
+
 </script>
 </body>
 </html>
